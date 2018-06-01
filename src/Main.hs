@@ -34,7 +34,7 @@ main = play window background fps initialState draw handleKeys update
 update :: Float -> PongGame -> PongGame
 update seconds game = if (paused game)
                       then game
-                      else ((moveBall seconds) . wallBounce . paddleBounce . movePlayers) game
+                      else ((moveBall seconds) . wallBounce . paddleBounce . movePlayers . handleBallOutOfBounds) game
 
 type Radius = Float
 type Position = (Float, Float)
@@ -137,6 +137,14 @@ movePlayers :: PongGame -> PongGame
 movePlayers game = game { player1 = movePlayer (player1 game) (player1Movement game)
                         , player2 = movePlayer (player2 game) (player2Movement game)
                         }
+
+outOfBounds :: Position -> Bool
+outOfBounds (bx, _) = bx > 150 || bx < -150
+
+handleBallOutOfBounds :: PongGame -> PongGame
+handleBallOutOfBounds game = if outOfBounds (ballLoc game)
+                             then game { ballLoc = initialPosition }
+                             else game
 
 
 handleKeys :: Event -> PongGame -> PongGame
