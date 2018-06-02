@@ -14,7 +14,7 @@ offset = 100
 fps = 60
 
 playerSpeed = 4.0
-aiSpeed = playerSpeed / 8
+aiSpeed = playerSpeed / 10
 
 ballRadius = 10
 paddleWidth = 13
@@ -24,7 +24,9 @@ wallWidth = 10
 paddleYMax = 150 - paddleLength - wallWidth
 
 initialPosition = (0.0, 0.0)
-initialVelocity = (60.0, 30.0)
+initialDirection = (1.5, 1.0)
+initialSpeed = 60.0
+speedIncrement = 5.0
 
 window :: Display
 window = InWindow "Pong" (width, height) (offset, offset)
@@ -47,7 +49,8 @@ data Winner = Player1 | Player2 | NoOne
 
 data PongGame = Game
   { ballLoc :: Position
-  , ballVel :: (Float, Float)
+  , ballDirection :: (Float, Float)
+  , ballSpeed :: Float
   , player1 :: Position
   , player1Movement :: PlayerMovement
   , player1Score :: Int
@@ -59,11 +62,11 @@ data PongGame = Game
   } deriving Show
 
 initialState :: PongGame
-initialState = Game initialPosition initialVelocity
+initialState = Game initialPosition initialDirection initialSpeed
   (-120.0, 20.0) PlayerStill 0
   (120.0, 100.0) PlayerStill 0
   False
-  True
+  False
 
 draw :: PongGame -> Picture
 draw game = pictures [ball, walls, mkPaddle rose (player1 game), mkPaddle orange (player2 game), scores]
@@ -104,9 +107,10 @@ moveBall :: Float -> PongGame -> PongGame
 moveBall seconds game = game { ballLoc = (x', y') }
   where
     (x, y) = ballLoc game
-    (vx, vy) = ballVel game
-    x' = x + vx * seconds
-    y' = y + vy * seconds
+    (vx, vy) = ballDirection game
+    speed = ballSpeed game
+    x' = x + vx * seconds * speed
+    y' = y + vy * seconds * speed
 
 wallCollision :: Position -> Bool
 wallCollision (_, y) = topCollision || bottomCollision
@@ -115,9 +119,9 @@ wallCollision (_, y) = topCollision || bottomCollision
     bottomCollision = y + ballRadius >= fromIntegral width / 2
 
 wallBounce :: PongGame -> PongGame
-wallBounce game = game { ballVel = (vx, vy') }
+wallBounce game = game { ballDirection = (vx, vy') }
   where
-    (vx, vy) = ballVel game
+    (vx, vy) = ballDirection game
     vy' = if wallCollision (ballLoc game) then -vy else vy
 
 
@@ -126,7 +130,7 @@ leftPaddleCollision ballPosition player = xCollision && yCollision
   where
     (x, y) = ballPosition
     (px, py) = player
-    xCollision = x - ballRadius == px + paddleWidth
+    xCollision = (x - ballRadius <= px + paddleWidth) && (x - ballRadius >= px - paddleWidth)
     yCollision = (y >= py - paddleLength) && (y <= py + paddleLength)
 
 rightPaddleCollision :: Position -> Position -> Bool
@@ -134,16 +138,21 @@ rightPaddleCollision ballPosition player = xCollision && yCollision
   where
     (x, y) = ballPosition
     (px, py) = player
-    xCollision = x + ballRadius == px - paddleWidth
+    xCollision = (x + ballRadius >= px - paddleWidth) && (x + ballRadius <= px + paddleWidth)
     yCollision = (y >= py - paddleLength) && (y <= py + paddleLength)
 
 paddleBounce :: PongGame -> PongGame
-paddleBounce game = game { ballVel = (vx', vy) }
+paddleBounce game = game { ballDirection = (vx', vy), ballSpeed = speed' }
   where
-    (vx, vy) = ballVel game
-    collision = leftPaddleCollision (ballLoc game) (player1 game)
-      || rightPaddleCollision (ballLoc game) (player2 game)
-    vx' = if collision then -vx else vx
+    (vx, vy) = ballDirection game
+    leftCollision = leftPaddleCollision (ballLoc game) (player1 game)
+    rightCollision = rightPaddleCollision (ballLoc game) (player2 game)
+    vx' = if leftCollision then abs vx
+          else if rightCollision then - (abs vx)
+          else vx
+    speed' = if leftCollision || rightCollision
+             then (ballSpeed game) + speedIncrement
+             else (ballSpeed game)
 
 lockPaddleBounds :: Position -> Position
 lockPaddleBounds (px, py) = (px, clamp (-paddleYMax) paddleYMax py)
@@ -166,8 +175,8 @@ winner _ = NoOne
 handleBallOutOfBounds :: PongGame -> PongGame
 handleBallOutOfBounds game = case winner (ballLoc game) of
                              NoOne -> game
-                             Player1 -> game { ballLoc = initialPosition, player1Score = (player1Score game) + 1}
-                             Player2 -> game { ballLoc = initialPosition, player2Score = (player2Score game) + 1}
+                             Player1 -> game { ballLoc = initialPosition, player1Score = (player1Score game) + 1, ballSpeed = initialSpeed }
+                             Player2 -> game { ballLoc = initialPosition, player2Score = (player2Score game) + 1, ballSpeed = initialSpeed }
 
 paddleAi :: PongGame -> PongGame
 paddleAi game | (aiEnabled game) = game { player2 = moveAi game }
