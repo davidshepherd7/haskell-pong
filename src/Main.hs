@@ -4,6 +4,9 @@ import Graphics.Gloss
 import Graphics.Gloss.Data.ViewPort
 import Graphics.Gloss.Interface.IO.Interact
 
+clamp :: (Ord a) => a -> a -> a -> a
+clamp mn mx = max mn . min mx
+
 width, height, offset :: Int
 width = 300
 height = 300
@@ -11,6 +14,7 @@ offset = 100
 fps = 60
 
 playerSpeed = 4.0
+aiSpeed = playerSpeed / 8
 
 ballRadius = 10
 paddleWidth = 13
@@ -34,7 +38,7 @@ main = play window background fps initialState draw handleKeys update
 update :: Float -> PongGame -> PongGame
 update seconds game = if (paused game)
                       then game
-                      else ((moveBall seconds) . wallBounce . paddleBounce . movePlayers . handleBallOutOfBounds) game
+                      else ((moveBall seconds) . wallBounce . paddleBounce . movePlayers . handleBallOutOfBounds . paddleAi) game
 
 type Radius = Float
 type Position = (Float, Float)
@@ -51,6 +55,7 @@ data PongGame = Game
   , player2Movement :: PlayerMovement
   , player2Score :: Int
   , paused :: Bool
+  , aiEnabled :: Bool
   } deriving Show
 
 initialState :: PongGame
@@ -58,6 +63,7 @@ initialState = Game initialPosition initialVelocity
   (-120.0, 20.0) PlayerStill 0
   (120.0, 100.0) PlayerStill 0
   False
+  True
 
 draw :: PongGame -> Picture
 draw game = pictures [ball, walls, mkPaddle rose (player1 game), mkPaddle orange (player2 game), scores]
@@ -139,14 +145,17 @@ paddleBounce game = game { ballVel = (vx', vy) }
       || rightPaddleCollision (ballLoc game) (player2 game)
     vx' = if collision then -vx else vx
 
+lockPaddleBounds :: Position -> Position
+lockPaddleBounds (px, py) = (px, clamp (-paddleYMax) paddleYMax py)
+
 movePlayer :: Position -> PlayerMovement -> Position
-movePlayer (px, py) PlayerUp = (px, min (py + playerSpeed) paddleYMax)
+movePlayer (px, py) PlayerUp = (px, py + playerSpeed)
 movePlayer (px, py) PlayerStill = (px, py)
-movePlayer (px, py) PlayerDown = (px, max (py - playerSpeed) (-paddleYMax))
+movePlayer (px, py) PlayerDown = (px, py - playerSpeed)
 
 movePlayers :: PongGame -> PongGame
-movePlayers game = game { player1 = movePlayer (player1 game) (player1Movement game)
-                        , player2 = movePlayer (player2 game) (player2Movement game)
+movePlayers game = game { player1 = lockPaddleBounds $ movePlayer (player1 game) (player1Movement game)
+                        , player2 = lockPaddleBounds $ movePlayer (player2 game) (player2Movement game)
                         }
 
 winner :: Position -> Winner
@@ -160,6 +169,17 @@ handleBallOutOfBounds game = case winner (ballLoc game) of
                              Player1 -> game { ballLoc = initialPosition, player1Score = (player1Score game) + 1}
                              Player2 -> game { ballLoc = initialPosition, player2Score = (player2Score game) + 1}
 
+paddleAi :: PongGame -> PongGame
+paddleAi game | (aiEnabled game) = game { player2 = moveAi game }
+paddleAi game = game
+
+moveAi :: PongGame -> Position
+moveAi game = lockPaddleBounds (px, newPy)
+  where (px, py) = player2 game
+        (bx, by) = ballLoc game
+        newPy = if py > (by + paddleLength) then py - aiSpeed
+                else if py < (by - paddleLength) then py + aiSpeed
+                else py
 
 handleKeys :: Event -> PongGame -> PongGame
 handleKeys (EventKey (Char 't') Down _ _) game = game { ballLoc = initialPosition }
