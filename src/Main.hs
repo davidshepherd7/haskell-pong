@@ -39,23 +39,28 @@ update seconds game = if (paused game)
 type Radius = Float
 type Position = (Float, Float)
 data PlayerMovement = PlayerUp | PlayerStill | PlayerDown deriving Show
+data Winner = Player1 | Player2 | NoOne
 
 data PongGame = Game
   { ballLoc :: Position
   , ballVel :: (Float, Float)
   , player1 :: Position
   , player1Movement :: PlayerMovement
+  , player1Score :: Int
   , player2 :: Position
   , player2Movement :: PlayerMovement
+  , player2Score :: Int
   , paused :: Bool
   } deriving Show
 
 initialState :: PongGame
-initialState = Game initialPosition initialVelocity (-120.0, 20.0) PlayerStill (120.0, 100.0) PlayerStill False
-
+initialState = Game initialPosition initialVelocity
+  (-120.0, 20.0) PlayerStill 0
+  (120.0, 100.0) PlayerStill 0
+  False
 
 draw :: PongGame -> Picture
-draw game = pictures [ball, walls, mkPaddle rose (player1 game), mkPaddle orange (player2 game)]
+draw game = pictures [ball, walls, mkPaddle rose (player1 game), mkPaddle orange (player2 game), scores]
   where
     --  The pong ball.
     ball = uncurry translate (ballLoc game) $ color ballColor $ circleSolid ballRadius
@@ -80,6 +85,12 @@ draw game = pictures [ball, walls, mkPaddle rose (player1 game), mkPaddle orange
       where (x, y) = pos
 
     paddleColor = light (light blue)
+
+    scores = translate (-30) (115) $
+      scale 0.25 0.25 $
+      color white $
+      text $
+      (show (player1Score game)) ++ " " ++ (show (player2Score game))
 
 
 
@@ -138,13 +149,16 @@ movePlayers game = game { player1 = movePlayer (player1 game) (player1Movement g
                         , player2 = movePlayer (player2 game) (player2Movement game)
                         }
 
-outOfBounds :: Position -> Bool
-outOfBounds (bx, _) = bx > 150 || bx < -150
+winner :: Position -> Winner
+winner (bx, _) | bx >= 150 = Player1
+winner (bx, _) | bx <= (-150) = Player2
+winner _ = NoOne
 
 handleBallOutOfBounds :: PongGame -> PongGame
-handleBallOutOfBounds game = if outOfBounds (ballLoc game)
-                             then game { ballLoc = initialPosition }
-                             else game
+handleBallOutOfBounds game = case winner (ballLoc game) of
+                             NoOne -> game
+                             Player1 -> game { ballLoc = initialPosition, player1Score = (player1Score game) + 1}
+                             Player2 -> game { ballLoc = initialPosition, player2Score = (player2Score game) + 1}
 
 
 handleKeys :: Event -> PongGame -> PongGame
