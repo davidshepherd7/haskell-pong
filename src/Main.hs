@@ -18,7 +18,7 @@ aiSpeed = playerSpeed / 10
 
 ballRadius = 10
 paddleWidth = 13
-paddleLength = 46
+paddleLength = 36
 wallWidth = 10
 
 paddleYMax = 150 - paddleLength - wallWidth
@@ -26,7 +26,7 @@ paddleYMax = 150 - paddleLength - wallWidth
 initialPosition = (0.0, 0.0)
 initialDirection = (1.5, 1.0)
 initialSpeed = 60.0
-speedIncrement = 5.0
+speedIncrement = 10.0
 
 window :: Display
 window = InWindow "Pong" (width, height) (offset, offset)
